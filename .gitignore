@@ -1,0 +1,10 @@
+# Ignorar variáveis de ambiente
+.env
+
+# (opcional) arquivos temporários do Streamlit
+.streamlit/
+
+# Cache do Python e VSCode
+__pycache__/
+*.pyc
+.vscode/
