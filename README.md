@@ -15,3 +15,5 @@ streamlit run chat_streamlit.py
 ```
 
 3. Abra seu navegador no endereço que aparecerá no terminal (geralmente http://localhost:8501)
+
+
