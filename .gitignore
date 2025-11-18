@@ -1,6 +1,9 @@
 # Ignorar variáveis de ambiente
 .env
-
+.venv
+venv/
+casco_tratadoA.csv
+casco3_tratadoA.csv
 # (opcional) arquivos temporários do Streamlit
 .streamlit/
 
