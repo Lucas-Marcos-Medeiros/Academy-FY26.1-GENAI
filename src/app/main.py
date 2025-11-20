@@ -13,14 +13,14 @@ if ROOT_PATH not in sys.path:
 # Importações
 from src.genai.llm_client import llm
 from src.app.calculator import calcular_premio
-from src.data.data_manager import get_data_manager
+from src.app.data_manager import get_data_manager
 from src.genai.llm_context import get_context_enricher
 
 # ------------------------------
 # CONFIGURAÇÃO DA APLICAÇÃO
 # ------------------------------
 st.set_page_config(
-    page_title="Assistente + Calculadora", 
+    page_title="SeguraBOT", 
     page_icon="🚗",
     layout="wide"
 )

@@ -10,8 +10,9 @@ if ROOT_PATH not in sys.path:
 
 # Importações
 from src.genai.llm_client import llm
-from src.data.data_manager import get_data_manager
+from src.app.data_manager import get_data_manager
 from src.genai.llm_context import get_context_enricher
+from src.analises.auxiliary_data_analyzer import get_auxiliary_analyzer
 
 
 # ============================================================
@@ -20,15 +21,16 @@ from src.genai.llm_context import get_context_enricher
 def calcular_premio_atuarial(modelo, ano, sexo, regiao_desc, faixa_desc):
     """
     Calcula um prêmio estimado de seguro com base em médias históricas
-    e fatores empíricos de múltiplas fontes de dados.
+    de ambos os semestres de 2019 e fatores empíricos.
     """
     
-    # Obtém o gerenciador de dados
+    # Obtém gerenciadores
     data_manager = get_data_manager()
     enricher = get_context_enricher()
+    aux_analyzer = get_auxiliary_analyzer()
     
-    # Carrega tabela principal
-    df = data_manager.get_table("casco0")
+    # Carrega dados combinados dos dois semestres
+    df = data_manager.get_combined_casco_data()
     
     # --- 1. Filtrar por modelo ---
     df_modelo = df[df["modelo"] == modelo]
@@ -85,6 +87,54 @@ def calcular_premio_atuarial(modelo, ano, sexo, regiao_desc, faixa_desc):
     contexto_adicional = enricher.get_calculator_context(
         modelo, ano, sexo, regiao_desc, faixa_desc
     )
+    
+    # Busca análise de risco integrada com dados auxiliares
+    # Mapeia regiao_desc para UF
+    uf_map = {
+        "São Paulo": "SP", "Rio de Janeiro": "RJ", "Minas Gerais": "MG",
+        "Paraná": "PR", "Santa Catarina": "SC", "Rio Grande do Sul": "RS"
+    }
+    
+    uf = None
+    for estado, sigla in uf_map.items():
+        if estado in regiao_desc:
+            uf = sigla
+            break
+    
+    # Análise de risco integrada
+    perfil_risco = None
+    if uf:
+        perfil_risco = aux_analyzer.get_integrated_risk_profile(modelo, uf)
+    
+    # Análise de evolução entre semestres
+    df_sem1 = df[df['semestre'] == 1]
+    df_sem2 = df[df['semestre'] == 2]
+    
+    evolucao_semestral = {
+        "tem_dados_sem1": False,
+        "tem_dados_sem2": False,
+        "variacao_premio": None,
+        "variacao_sinistralidade": None
+    }
+    
+    # Busca dados do modelo em cada semestre
+    filtro_modelo = (df['modelo'] == modelo)
+    dados_sem1 = df_sem1[filtro_modelo]
+    dados_sem2 = df_sem2[filtro_modelo]
+    
+    if not dados_sem1.empty:
+        evolucao_semestral["tem_dados_sem1"] = True
+        evolucao_semestral["premio_medio_sem1"] = dados_sem1['premio1'].mean()
+        
+    if not dados_sem2.empty:
+        evolucao_semestral["tem_dados_sem2"] = True
+        evolucao_semestral["premio_medio_sem2"] = dados_sem2['premio1'].mean()
+        
+    # Calcula variação se houver dados de ambos períodos
+    if evolucao_semestral["tem_dados_sem1"] and evolucao_semestral["tem_dados_sem2"]:
+        p1 = evolucao_semestral["premio_medio_sem1"]
+        p2 = evolucao_semestral["premio_medio_sem2"]
+        evolucao_semestral["variacao_premio"] = ((p2 - p1) / p1 * 100) if p1 > 0 else None
 
     return {
         "erro": False,
@@ -99,6 +149,9 @@ def calcular_premio_atuarial(modelo, ano, sexo, regiao_desc, faixa_desc):
         "severidade": round(severidade_media, 2),
         "registro_utilizado": df_regiao,
         "contexto_adicional": contexto_adicional,
+        "evolucao_semestral": evolucao_semestral,
+        "periodo_dados": registro.get("periodo", "Não especificado"),
+        "perfil_risco": perfil_risco
     }
 
 
@@ -118,148 +171,252 @@ def calcular_premio():
     
     # Exibe informações sobre tabelas disponíveis
     with st.expander("📊 Fontes de Dados Utilizadas"):
-        st.markdown(data_manager.get_all_tables_summary())
+        st.markdown("""
+        **Dados de 2019 - Análise Semestral:**
+        - 📅 **1º Semestre 2019:** casco_tratadoA.csv
+        - 📅 **2º Semestre 2019:** casco_tratadoB.csv
+        - 📊 **Base Combinada:** Permite análise temporal e comparação de tendências
+        """)
+        st.info(f"Total de registros: {len(data_manager.get_combined_casco_data()):,}")
 
-    df = data_manager.get_table("casco0")
+    df = data_manager.get_combined_casco_data()
 
     st.markdown("### Preencha os dados:")
 
-    # Cria duas colunas para layout mais compacto
-    col1, col2 = st.columns(2)
-
-    # Ordenação dos dropdowns usando data_manager
-    with col1:
-        modelos = data_manager.get_unique_values("casco0", "modelo")
-        modelo = st.selectbox("🚗 Modelo", modelos)
+    # ===========================
+    # FORMULÁRIO MELHORADO
+    # ===========================
+    with st.form("form_calculo"):
         
-        sexos = data_manager.get_unique_values("casco0", "sexo")
-        sexo = st.selectbox("👤 Sexo", sexos)
-        
-        faixas = data_manager.get_unique_values("casco0", "faixa_desc")
-        faixa_desc = st.selectbox("📅 Faixa Etária", faixas)
-
-    with col2:
-        anos = sorted(
-            pd.Series(df["ano"].dropna().unique()).astype(int).unique(), 
-            reverse=True
-        )
-        ano = st.selectbox("📆 Ano", anos)
-        
-        regioes = data_manager.get_unique_values("casco0", "regiao_desc")
-        regiao_desc = st.selectbox("📍 Região", regioes)
-
-    st.markdown("---")
-
-    if st.button("💰 Calcular Prêmio", type="primary", use_container_width=True):
-
-        with st.spinner("Calculando..."):
-            resultado = calcular_premio_atuarial(
-                modelo, int(ano), sexo, regiao_desc, faixa_desc
-            )
-
-        if resultado["erro"]:
-            st.error(resultado["mensagem"])
-            return
-
-        # Exibe resultado principal
-        st.success("✅ Cálculo realizado com sucesso!")
-        
-        col1, col2, col3 = st.columns(3)
+        # Linha 1: Modelo e Ano
+        col1, col2 = st.columns(2)
         
         with col1:
-            st.metric(
-                label="Prêmio Estimado",
-                value=f"R$ {resultado['premio_estimado']:,.2f}"
+            modelos = sorted(
+                df["modelo"].dropna().unique(), 
+                key=lambda s: str(s).strip().lower()
+            )
+            modelo = st.selectbox(
+                "🚗 Modelo do Veículo",
+                modelos,
+                help="Selecione o modelo do veículo"
             )
         
         with col2:
-            st.metric(
-                label="Prêmio Histórico",
-                value=f"R$ {resultado['premio_historico']:,.2f}"
+            anos = sorted(df["ano"].dropna().astype(int).unique(), reverse=True)
+            ano = st.selectbox(
+                "📆 Ano de Fabricação",
+                anos,
+                help="Ano de fabricação do veículo"
             )
-            
-        with col3:
-            diferenca = resultado['premio_estimado'] - resultado['premio_historico']
-            st.metric(
-                label="Diferença",
-                value=f"R$ {abs(diferenca):,.2f}",
-                delta=f"{(diferenca/resultado['premio_historico']*100):.1f}%" if resultado['premio_historico'] > 0 else "N/A"
-            )
-
-        # Detalhes técnicos
-        with st.expander("📊 Detalhes Técnicos do Cálculo"):
-            st.json({
-                "modelo": resultado["modelo"],
-                "ano": resultado["ano"],
-                "sexo": resultado["sexo"],
-                "regiao": resultado["regiao"],
-                "faixa_etaria": resultado["faixa"],
-                "frequencia_sinistros": resultado["frequencia"],
-                "severidade_media": resultado["severidade"]
-            })
-
-        # Contexto adicional de outras tabelas
-        if "contexto_adicional" in resultado and resultado["contexto_adicional"].get("dados_complementares"):
-            with st.expander("🔍 Análise Comparativa (Multi-Tabelas)"):
-                contexto = resultado["contexto_adicional"]["dados_complementares"]
-                
-                if "estatisticas_modelo" in contexto:
-                    st.markdown("**📈 Estatísticas do Modelo:**")
-                    stats = contexto["estatisticas_modelo"]
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Prêmio Médio", f"R$ {stats.get('premio_medio', 0):,.2f}")
-                    with col2:
-                        st.metric("Prêmio Mínimo", f"R$ {stats.get('premio_min', 0):,.2f}")
-                    with col3:
-                        st.metric("Prêmio Máximo", f"R$ {stats.get('premio_max', 0):,.2f}")
-                
-                if "estatisticas_regiao" in contexto:
-                    st.markdown("**📍 Estatísticas da Região:**")
-                    stats = contexto["estatisticas_regiao"]
-                    st.metric("Prêmio Médio da Região", f"R$ {stats.get('premio_medio', 0):,.2f}")
-                    
-                    if "modelos_populares" in stats:
-                        st.markdown("**Modelos mais segurados nesta região:**")
-                        for modelo, qtd in list(stats["modelos_populares"].items())[:3]:
-                            st.write(f"- {modelo}: {qtd} apólices")
-
-        # =========================================
-        # EXPLICAÇÃO PELA LLM COM CONTEXTO ENRIQUECIDO
-        # =========================================
-        st.markdown("---")
         
-        with st.spinner("Gerando explicação personalizada..."):
-            
-            # Monta prompt enriquecido com dados de múltiplas tabelas
-            prompt_explicacao = f"""
-            Você é um especialista em seguros automotivos. Explique este cálculo de forma clara e objetiva.
-            
-            **Dados do Cálculo:**
-            {resultado}
-            
-            **Instruções:**
-            1. Explique o valor do prêmio calculado
-            2. Destaque os principais fatores que influenciaram o valor
-            3. Compare com as médias históricas quando relevante
-            4. Seja objetivo e use linguagem acessível
-            5. Limite sua resposta a 3-4 parágrafos
-            """
-            
-            explicacao = llm.invoke(prompt_explicacao)
+        # Linha 2: Sexo e Faixa Etária
+        col3, col4 = st.columns(2)
+        
+        with col3:
+            sexos = sorted(df["sexo"].dropna().unique(), key=lambda s: str(s).lower())
+            sexo_map = {"M": "Masculino", "F": "Feminino"}
+            sexo_display = [sexo_map.get(s, s) for s in sexos]
+            sexo_selecionado = st.selectbox(
+                "👤 Sexo do Condutor",
+                sexo_display,
+                help="Sexo do condutor principal"
+            )
+            # Converte de volta para M/F
+            sexo_reverse_map = {v: k for k, v in sexo_map.items()}
+            sexo = sexo_reverse_map.get(sexo_selecionado, sexos[0])
+        
+        with col4:
+            faixas = sorted(df["faixa_desc"].dropna().unique(), key=lambda s: str(s).lower())
+            faixa_desc = st.selectbox(
+                "📅 Faixa Etária",
+                faixas,
+                help="Faixa etária do condutor principal"
+            )
+        
+        # Linha 3: Região (coluna única para destaque)
+        regiao_col = st.container()
+        with regiao_col:
+            regioes = sorted(df["regiao_desc"].dropna().unique(), key=lambda s: str(s).lower())
+            regiao_desc = st.selectbox(
+                "📍 Região",
+                regioes,
+                help="Estado ou região onde o veículo será segurado"
+            )
+        
+        # Botão de submit centralizado e destacado
+        col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
+        with col_btn2:
+            submitted = st.form_submit_button(
+                "Calcular Prêmio",
+                use_container_width=True,
+            )
 
-        st.subheader("🤖 Explicação da IA")
-        st.info(explicacao.content)
+    # Só executa o cálculo quando clicar no botão do formulário
+    if not submitted:
+        return
 
-        # Botão de download
-        st.markdown("---")
-        df_export = resultado["registro_utilizado"]
-        csv = df_export.to_csv(index=False).encode("utf-8")
-
-        st.download_button(
-            label="📥 Baixar Dados do Cálculo (CSV)",
-            data=csv,
-            file_name=f"calculo_premio_{modelo}_{ano}.csv",
-            mime="text/csv",
-            use_container_width=True
+    # =============================
+    # EXECUÇÃO DO CÁLCULO
+    # =============================
+    with st.spinner("Calculando..."):
+        resultado = calcular_premio_atuarial(
+            modelo, int(ano), sexo, regiao_desc, faixa_desc
         )
+
+    if resultado["erro"]:
+        st.error(resultado["mensagem"])
+        return
+
+    # Exibe resultado principal
+    st.success("✅ Cálculo realizado com sucesso!")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric(
+            label="Prêmio Estimado",
+            value=f"R$ {resultado['premio_estimado']:,.2f}"
+        )
+    
+    with col2:
+        st.metric(
+            label="Prêmio Histórico",
+            value=f"R$ {resultado['premio_historico']:,.2f}"
+        )
+        
+    with col3:
+        diferenca = resultado['premio_estimado'] - resultado['premio_historico']
+        st.metric(
+            label="Diferença",
+            value=f"R$ {abs(diferenca):,.2f}",
+            delta=f"{(diferenca/resultado['premio_historico']*100):.1f}%" if resultado['premio_historico'] > 0 else "N/A"
+        )
+
+    # =========================================
+    # Detalhes técnicos do cálculo
+    # =========================================
+    with st.expander("📊 Detalhes Técnicos do Cálculo"):
+        st.json({
+            "modelo": resultado["modelo"],
+            "ano": resultado["ano"],
+            "sexo": resultado["sexo"],
+            "regiao": resultado["regiao"],
+            "faixa_etaria": resultado["faixa"],
+            "frequencia_sinistros": resultado["frequencia"],
+            "severidade_media": resultado["severidade"]
+        })
+
+    # =========================================
+    # Contexto adicional de outras tabelas
+    # =========================================
+    if "contexto_adicional" in resultado and resultado["contexto_adicional"].get("dados_complementares"):
+        with st.expander("🔍 Análise Comparativa (Multi-Tabelas)"):
+            contexto = resultado["contexto_adicional"]["dados_complementares"]
+            
+            if "estatisticas_modelo" in contexto:
+                st.markdown("**📈 Estatísticas do Modelo:**")
+                stats = contexto["estatisticas_modelo"]
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Prêmio Médio", f"R$ {stats.get('premio_medio', 0):,.2f}")
+                with col2:
+                    st.metric("Prêmio Mínimo", f"R$ {stats.get('premio_min', 0):,.2f}")
+                with col3:
+                    st.metric("Prêmio Máximo", f"R$ {stats.get('premio_max', 0):,.2f}")
+            
+            if "estatisticas_regiao" in contexto:
+                st.markdown("**📍 Estatísticas da Região:**")
+                stats = contexto["estatisticas_regiao"]
+                st.metric("Prêmio Médio da Região", f"R$ {stats.get('premio_medio', 0):,.2f}")
+                
+                if "modelos_populares" in stats:
+                    st.markdown("**Modelos mais segurados nesta região:**")
+                    for modelo, qtd in list(stats["modelos_populares"].items())[:3]:
+                        st.write(f"- {modelo}: {qtd} apólices")
+
+    # =========================================
+    # Evolução temporal
+    # =========================================
+    if "evolucao_semestral" in resultado:
+        evolucao = resultado["evolucao_semestral"]
+        
+        if evolucao["tem_dados_sem1"] and evolucao["tem_dados_sem2"]:
+            with st.expander("📈 Evolução Temporal - Análise Semestral 2019"):
+                st.markdown("**Comparação entre 1º e 2º Semestre de 2019:**")
+                
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    st.metric("1º Semestre", f"R$ {evolucao['premio_medio_sem1']:,.2f}")
+                
+                with col2:
+                    st.metric("2º Semestre", f"R$ {evolucao['premio_medio_sem2']:,.2f}")
+                
+                with col3:
+                    if evolucao["variacao_premio"] is not None:
+                        variacao = evolucao["variacao_premio"]
+                        st.metric("Variação", f"{abs(variacao):.2f}%", delta=f"{variacao:.2f}%")
+
+    # =========================================
+    # Análise de risco integrada
+    # =========================================
+    if "perfil_risco" in resultado and resultado["perfil_risco"]:
+        perfil = resultado["perfil_risco"]
+        
+        with st.expander("🎯 Análise de Risco Integrada"):
+            st.markdown(f"**Modelo:** {perfil['modelo']}")
+            st.markdown(f"**Estado:** {perfil['estado']}")
+
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                nivel_cor = {"Alto": "🔴", "Médio": "🟡", "Baixo": "🟢"}
+                st.metric(
+                    "Nível de Risco",
+                    f"{nivel_cor.get(perfil['nivel_risco'], '')} {perfil['nivel_risco']}",
+                    delta=f"Score: {perfil['risk_score']}/100"
+                )
+
+            with col2:
+                st.info(perfil['recomendacao'])
+
+    # =========================================
+    # Explicação da IA
+    # =========================================
+    st.markdown("---")
+    
+    with st.spinner("Gerando explicação personalizada..."):
+        prompt_explicacao = f"""
+        Você é um especialista em seguros automotivos. Explique este cálculo de forma clara e objetiva.
+
+        **Dados do Cálculo:**
+        {resultado}
+
+        **Instruções:**
+        1. Explique o valor do prêmio calculado
+        2. Destaque os principais fatores que influenciaram o valor
+        3. Compare com as médias históricas quando relevante
+        4. Seja objetivo e use linguagem acessível
+        5. Limite sua resposta a 3-4 parágrafos
+        """
+        
+        explicacao = llm.invoke(prompt_explicacao)
+
+    st.subheader("Explicação da IA:")
+    st.info(explicacao.content)
+
+    # =========================================
+    # Download CSV
+    # =========================================
+    st.markdown("---")
+    df_export = resultado["registro_utilizado"]
+    csv = df_export.to_csv(index=False).encode("utf-8")
+
+    st.download_button(
+        label="📥 Baixar Dados do Cálculo (CSV)",
+        data=csv,
+        file_name=f"calculo_premio_{modelo}_{ano}.csv",
+        mime="text/csv",
+        use_container_width=True
+    )

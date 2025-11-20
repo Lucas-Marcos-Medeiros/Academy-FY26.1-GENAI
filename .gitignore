@@ -1,13 +1,12 @@
 # Ignorar variáveis de ambiente
 .env
-<<<<<<< HEAD
-C:\Users\Pichau\Desktop\Academy-FY26.1-GENAI\src\data
-=======
 .venv
 venv/
 casco_tratadoA.csv
-casco3_tratadoA.csv
->>>>>>> lucas
+casco_tratadoB.csv
+acidentes2019_todas_causas_tipos.csv
+indicadoressegurancapublicauf.csv
+projecoes_grupos_etarios_quantidades.csv
 # (opcional) arquivos temporários do Streamlit
 .streamlit/
 
