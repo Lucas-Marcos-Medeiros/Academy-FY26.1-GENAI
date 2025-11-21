@@ -3,6 +3,7 @@ Gerenciador centralizado para múltiplas tabelas de dados
 Versão CORRIGIDA - Usa APENAS HuggingFace (sem arquivos locais)
 """
 import pandas as pd
+import streamlit as st
 import os
 from typing import Dict, List, Optional
 from dataclasses import dataclass
@@ -56,25 +57,20 @@ class DataManager:
         self.configs[config.name] = config
         
     def load_table(self, table_name: str) -> pd.DataFrame:
-        """Carrega uma tabela específica do HuggingFace"""
-        # Se já está em cache, retorna
         if table_name in self.tables:
-            print(f"♻️ {table_name} já carregado (cache)")
             return self.tables[table_name]
-            
+
         if table_name not in self.configs:
             raise ValueError(f"Tabela '{table_name}' não registrada")
-        
-        # Carrega APENAS do HuggingFace
-        if self.use_huggingface and self.hf_loader:
-            df = self._load_from_huggingface(table_name)
-            if df is not None:
-                self.tables[table_name] = df
-                return df
-            else:
-                raise ValueError(f"Falha ao carregar {table_name} do HuggingFace")
-        else:
-            raise ValueError("HuggingFace não está disponível. Carregue o huggingface_loader.py")
+
+        @st.cache_data(show_spinner=False)
+        def load_cached_csv(table_name):
+            print(f"📥 Baixando {table_name} via HuggingFace (primeira vez)...")
+            return self.hf_loader.load_csv(table_name)
+
+        df = load_cached_csv(table_name)
+        self.tables[table_name] = df
+        return df
     
     def _load_from_huggingface(self, table_name: str) -> Optional[pd.DataFrame]:
         """Carrega tabela do HuggingFace"""
@@ -351,9 +347,6 @@ if __name__ == "__main__":
     
     # Inicializa
     dm = get_data_manager()
-    
-    # Carrega todas as tabelas
-    dm.load_all_tables()
     
     # Mostra resumo
     print("\n" + dm.get_all_tables_summary())
