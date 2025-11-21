@@ -2,6 +2,12 @@
 .env
 .venv
 venv/
+casco_tratadoA.csv
+casco_tratadoB.csv
+acidentes2019_todas_causas_tipos.csv
+indicadoressegurancapublicauf.csv
+projecoes_grupos_etarios_quantidades.csv
+C:\Users\Pichau\Desktop\Academy-FY26.1-GENAI\.streamlit
 # (opcional) arquivos temporários do Streamlit
 .streamlit/
 

@@ -1,5 +1,14 @@
 streamlit
 langchain-openai
 langgraph
+scikit-learn
+plotly
+openai
 pandas
 python-dotenv
+numpy
+gdown>=4.7.1
+pyyaml>=6.0
+requests>=2.31.0
+datasets>=2.14.0
+huggingface_hub>=0.17.0
