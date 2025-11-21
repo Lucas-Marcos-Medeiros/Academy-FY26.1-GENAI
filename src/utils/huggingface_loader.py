@@ -27,7 +27,7 @@ class HuggingFaceLoader:
         
         # Fallback final: dataset padrão
         if not repo:
-            repo = 'Pichau2907/casco_dataset'
+            repo = 'Qluks/seguros-dataset'
         
         return repo
     
@@ -35,26 +35,26 @@ class HuggingFaceLoader:
         """Configuração dos arquivos no dataset"""
         return {
             'casco_sem1': {
-                'filename': 'casco_tratadoA.csv',
+                'filename': 'casco_tratadoA.parquet',
                 'separator': ',',
                 'encoding': 'utf-8',
                 'description': '1º Semestre 2019'
             },
             'casco_sem2': {
-                'filename': 'casco_tratadoB.csv',
+                'filename': 'casco_tratadoB.parquet',
                 'separator': ',',
                 'encoding': 'utf-8',
                 'description': '2º Semestre 2019'
             },
             'acidentes_2019': {
-                'filename': 'acidentes2019_todas_causas_tipos.csv',
+                'filename': 'acidentes2019_todas_causas_tipos.parquet',
                 'separator': ';',
                 'encoding': 'latin1',
                 'description': 'Acidentes 2019',
                 'has_scientific_notation': True  # ← NOVA FLAG
             },
             'seguranca_publica': {
-                'filename': 'indicadoressegurancapublicauf.csv',
+                'filename': 'indicadoressegurancapublicauf.parquet',
                 'separator': ',',
                 'encoding': 'utf-8',
                 'description': 'Segurança Pública',
@@ -62,7 +62,7 @@ class HuggingFaceLoader:
                 'column_names': ['estado', 'tipo_crime', 'ano', 'mes', 'quantidade']
             },
             'projecoes_populacao': {
-                'filename': 'projecoes_grupos_etarios_quantidades.csv',
+                'filename': 'projecoes_grupos_etarios_quantidades.parquet',
                 'separator': ',',
                 'encoding': 'utf-8',
                 'description': 'Projeções Populacionais'
@@ -72,7 +72,7 @@ class HuggingFaceLoader:
     @st.cache_data(ttl=3600, show_spinner="Carregando dados do HuggingFace...")
     def load_csv(_self, table_name: str) -> Optional[pd.DataFrame]:
         """
-        Carrega CSV do HuggingFace com correção de formatação
+        Carrega Parquet do HuggingFace com correção de formatação
         
         Args:
             table_name: Nome da tabela (casco_sem1, acidentes_2019, etc)
@@ -118,7 +118,7 @@ class HuggingFaceLoader:
                     single_column_data = df.iloc[:, 0].astype(str)
                     
                     # Re-parse com separador correto
-                    df = pd.read_csv(
+                    df = pd.read_parquet(
                         io.StringIO('\n'.join(single_column_data)),
                         sep=config['separator'],
                         encoding=config.get('encoding', 'utf-8'),
@@ -164,7 +164,7 @@ class HuggingFaceLoader:
                     single_column_data = df.iloc[:, 0].astype(str)
                     
                     # Re-parse com separador correto
-                    df = pd.read_csv(
+                    df = pd.read_parquet(
                         io.StringIO('\n'.join(single_column_data)),
                         sep=config['separator'],
                         encoding=config.get('encoding', 'utf-8'),
@@ -179,7 +179,7 @@ class HuggingFaceLoader:
                 for sep in [';', ',', '\t', '|']:
                     try:
                         single_column_data = df.iloc[:, 0].astype(str)
-                        df_test = pd.read_csv(
+                        df_test = pd.read_parquet(
                             io.StringIO('\n'.join(single_column_data)),
                             sep=sep,
                             encoding=config.get('encoding', 'utf-8'),
@@ -191,7 +191,7 @@ class HuggingFaceLoader:
                             print(f"   ✅ Separador detectado: '{sep}'")
                             # Recarrega com separador correto
                             single_column_data = df.iloc[:, 0].astype(str)
-                            df = pd.read_csv(
+                            df = pd.read_parquet(
                                 io.StringIO('\n'.join(single_column_data)),
                                 sep=sep,
                                 encoding=config.get('encoding', 'utf-8'),

@@ -34,6 +34,7 @@ import time
 def init_data_manager():
     """Inicializa o gerenciador de dados"""
     dm = get_data_manager()
+    dm.load_all_tables()
     return dm
 
 # Verifica se já carregou
