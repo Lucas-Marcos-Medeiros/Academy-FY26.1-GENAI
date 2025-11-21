@@ -302,14 +302,14 @@ def _initialize_tables(manager: DataManager):
     # Tabelas principais
     manager.register_table(TableConfig(
         name="casco_sem1",
-        file_path="casco_tratadoA.csv",
+        file_path="casco_tratadoA.parquet",
         description="Dados de seguros de casco - 1º Semestre 2019",
         key_columns=["modelo", "ano", "sexo", "regiao_desc", "faixa_desc"]
     ))
     
     manager.register_table(TableConfig(
         name="casco_sem2",
-        file_path="casco_tratadoB.csv",
+        file_path="casco_tratadoB.parquet",
         description="Dados de seguros de casco - 2º Semestre 2019",
         key_columns=["modelo", "ano", "sexo", "regiao_desc", "faixa_desc"]
     ))
@@ -317,21 +317,21 @@ def _initialize_tables(manager: DataManager):
     # Tabelas auxiliares
     manager.register_table(TableConfig(
         name="acidentes_2019",
-        file_path="acidentes2019_todas_causas_tipos.csv",
+        file_path="acidentes2019_todas_causas_tipos.parquet",
         description="Dados de acidentes de trânsito em 2019",
         key_columns=["uf", "causa_acidente", "tipo_acidente", "marca"]
     ))
     
     manager.register_table(TableConfig(
         name="seguranca_publica",
-        file_path="indicadoressegurancapublicauf.csv",
+        file_path="indicadoressegurancapublicauf.parquet",
         description="Indicadores de roubos e furtos por estado",
         key_columns=["estado", "tipo_crime", "ano", "mes"]
     ))
     
     manager.register_table(TableConfig(
         name="projecoes_populacao",
-        file_path="projecoes_grupos_etarios_quantidades.csv",
+        file_path="projecoes_grupos_etarios_quantidades.parquet",
         description="Projeções demográficas por faixa etária",
         key_columns=["ANO", "SIGLA", "LOCAL"]
     ))
