@@ -2,11 +2,6 @@
 .env
 .venv
 venv/
-casco_tratadoA.csv
-casco_tratadoB.csv
-acidentes2019_todas_causas_tipos.csv
-indicadoressegurancapublicauf.csv
-projecoes_grupos_etarios_quantidades.csv
 # (opcional) arquivos temporários do Streamlit
 .streamlit/
 
